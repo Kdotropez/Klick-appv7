@@ -7,7 +7,7 @@ import Button from '../common/Button';
 import RecapModal from './RecapModal';
 import '../../assets/styles.css';
 
-const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees, planning: initialPlanning, onBack, onBackToShop, onBackToWeek, onBackToConfig, onReset }) => {
+const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees, planning: initialPlanning, onBack, onBackToShop, onBackToWeek, onBackToConfig, onReset, handleExportToJson, handleResetData }) => {
     const [currentDay, setCurrentDay] = useState(0);
     const [planning, setPlanning] = useState(loadFromLocalStorage(`planning_${selectedShop}_${selectedWeek}`, initialPlanning || {}) || {});
     const [showCopyPaste, setShowCopyPaste] = useState(false);
@@ -36,7 +36,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
     });
 
     useEffect(() => {
-        console.log('Initial planning state:', { initialPlanning, selectedEmployees, selectedWeek });
+        console.log('Initial planning state:', { initialPlanning, selectedEmployees, selectedWeek, config });
         setPlanning(prev => {
             const updatedPlanning = JSON.parse(JSON.stringify(prev));
             const storedSelectedEmployees = loadFromLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, selectedEmployees || []);
@@ -45,7 +45,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
                 for (let i = 0; i < 7; i++) {
                     const dayKey = format(addDays(new Date(selectedWeek), i), 'yyyy-MM-dd');
                     const existingSlots = updatedPlanning[employee][dayKey] || [];
-                    const newSlotCount = config.timeSlots?.length || 0;
+                    const newSlotCount = config?.timeSlots?.length || 0;
                     if (existingSlots.length > 0 && newSlotCount > 0) {
                         const minLength = Math.min(existingSlots.length, newSlotCount);
                         updatedPlanning[employee][dayKey] = [
@@ -58,7 +58,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
                 }
             });
             console.log('Synchronized planning with new config:', { config, updatedPlanning, storedSelectedEmployees });
-            if (Object.keys(updatedPlanning).length > 0 && config.timeSlots?.length > 0) {
+            if (Object.keys(updatedPlanning).length > 0 && config?.timeSlots?.length > 0) {
                 saveToLocalStorage(`planning_${selectedShop}_${selectedWeek}`, updatedPlanning);
                 console.log('Saved planning to localStorage:', { key: `planning_${selectedShop}_${selectedWeek}`, planning: updatedPlanning });
             }
@@ -75,7 +75,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
                     for (let i = 0; i < 7; i++) {
                         const dayKey = format(addDays(new Date(selectedWeek), i), 'yyyy-MM-dd');
                         const existingSlots = initialPlanning[employee]?.[dayKey] || updatedPlanning[employee][dayKey] || [];
-                        const newSlotCount = config.timeSlots?.length || 0;
+                        const newSlotCount = config?.timeSlots?.length || 0;
                         if (existingSlots.length > 0 && newSlotCount > 0) {
                             const minLength = Math.min(existingSlots.length, newSlotCount);
                             updatedPlanning[employee][dayKey] = [
@@ -87,7 +87,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
                         }
                     }
                 });
-                if (Object.keys(updatedPlanning).length > 0 && config.timeSlots?.length > 0) {
+                if (Object.keys(updatedPlanning).length > 0 && config?.timeSlots?.length > 0) {
                     saveToLocalStorage(`planning_${selectedShop}_${selectedWeek}`, updatedPlanning);
                     console.log('Synchronized with initialPlanning:', { key: `planning_${selectedShop}_${selectedWeek}`, planning: updatedPlanning });
                 }
@@ -97,7 +97,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
     }, [initialPlanning, selectedWeek, config, selectedShop]);
 
     useEffect(() => {
-        if (Object.keys(planning).length > 0 && config.timeSlots?.length > 0) {
+        if (Object.keys(planning).length > 0 && config?.timeSlots?.length > 0) {
             saveToLocalStorage(`planning_${selectedShop}_${selectedWeek}`, planning);
             console.log('Saved planning to localStorage:', { key: `planning_${selectedShop}_${selectedWeek}`, planning });
         }
@@ -105,7 +105,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
 
     useEffect(() => {
         return () => {
-            if (Object.keys(planning).length > 0 && config.timeSlots?.length > 0) {
+            if (Object.keys(planning).length > 0 && config?.timeSlots?.length > 0) {
                 saveToLocalStorage(`lastPlanning_${selectedShop}`, {
                     week: selectedWeek,
                     planning: planning
@@ -121,7 +121,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
         const storedSelectedEmployees = loadFromLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, selectedEmployees || []);
         (storedSelectedEmployees || []).forEach(employee => {
             const slots = planning[employee]?.[dayKey] || [];
-            const hours = (slots.filter(slot => slot).length * (config.interval || 0)) / 60;
+            const hours = (slots.filter(slot => slot).length * (config?.interval || 0)) / 60;
             totalHours += hours;
         });
         return totalHours;
@@ -130,7 +130,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
     const calculateEmployeeDailyHours = (employee, dayKey, weekPlanning) => {
         const slots = weekPlanning[employee]?.[dayKey] || [];
         console.log(`Calculating daily hours for ${employee} on ${dayKey}:`, { slots });
-        return (slots.filter(slot => slot).length * (config.interval || 0)) / 60;
+        return (slots.filter(slot => slot).length * (config?.interval || 0)) / 60;
     };
 
     const calculateEmployeeWeeklyHours = (employee, weekStart, weekPlanning, targetMonth = null) => {
@@ -158,7 +158,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
 
     const toggleSlot = (employee, slotIndex, dayIndex) => {
         console.log('toggleSlot called:', { employee, slotIndex, dayIndex, planning });
-        if (!config.timeSlots || config.timeSlots.length === 0) {
+        if (!config?.timeSlots || config.timeSlots.length === 0) {
             setFeedback('Erreur: Configuration des tranches horaires non valide.');
             return;
         }
@@ -173,7 +173,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
             }
             updatedPlanning[employee][dayKey][slotIndex] = !updatedPlanning[employee][dayKey][slotIndex];
             console.log('Updated planning:', updatedPlanning);
-            if (Object.keys(updatedPlanning).length > 0 && config.timeSlots?.length > 0) {
+            if (Object.keys(updatedPlanning).length > 0 && config?.timeSlots?.length > 0) {
                 saveToLocalStorage(`planning_${selectedShop}_${selectedWeek}`, updatedPlanning);
             }
             return updatedPlanning;
@@ -181,7 +181,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
     };
 
     const copyDay = () => {
-        if (!config.timeSlots || config.timeSlots.length === 0) {
+        if (!config?.timeSlots || config.timeSlots.length === 0) {
             setFeedback('Erreur: Configuration des tranches horaires non valide.');
             return;
         }
@@ -214,7 +214,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
     };
 
     const pasteDay = () => {
-        if (!config.timeSlots || config.timeSlots.length === 0) {
+        if (!config?.timeSlots || config.timeSlots.length === 0) {
             setFeedback('Erreur: Configuration des tranches horaires non valide.');
             return;
         }
@@ -244,7 +244,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
                     updatedPlanning[target][dayKey] = [...copied.data[employee]];
                 }
             });
-            if (Object.keys(updatedPlanning).length > 0 && config.timeSlots?.length > 0) {
+            if (Object.keys(updatedPlanning).length > 0 && config?.timeSlots?.length > 0) {
                 saveToLocalStorage(`planning_${selectedShop}_${selectedWeek}`, updatedPlanning);
             }
             return updatedPlanning;
@@ -263,7 +263,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
             setFeedback('Veuillez sélectionner une option.');
             return;
         }
-        if (!config || !config.timeSlots || !config.timeSlots.length) {
+        if (!config?.timeSlots || !config.timeSlots.length) {
             setFeedback('Erreur: Configuration des tranches horaires non valide.');
             return;
         }
@@ -380,7 +380,6 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
             try {
                 const weekDate = new Date(weekKey);
                 if (!isNaN(weekDate.getTime()) && isMonday(weekDate)) {
-                    // Vérifier si la semaine chevauche le mois cible
                     const weekEnd = addDays(weekDate, 6);
                     if (isWithinInterval(weekDate, { start: monthStart, end: monthEnd }) ||
                         isWithinInterval(weekEnd, { start: monthStart, end: monthEnd }) ||
@@ -397,7 +396,6 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
             }
         });
 
-        // Ajouter la semaine courante uniquement si elle n'est pas déjà dans localStorage
         if (isMonday(new Date(selectedWeek)) && Object.keys(planning).length > 0) {
             const weekExists = weeks.some(week => week.weekStart === currentWeekKey);
             if (!weekExists) {
@@ -503,7 +501,9 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
         return { monthlyTotal, weeklyRecaps };
     };
 
-    if (!config.timeSlots || config.timeSlots.length === 0) {
+    // Vérification initiale pour config
+    if (!config || !config.timeSlots || !Array.isArray(config.timeSlots) || config.timeSlots.length === 0) {
+        console.log('Config invalide:', { config });
         return (
             <div className="planning-container">
                 <h2 style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center' }}>
@@ -527,6 +527,9 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
                     </Button>
                     <Button className="button-base button-reinitialiser" onClick={handleReset}>
                         Réinitialiser
+                    </Button>
+                    <Button className="button-base button-primary" onClick={handleExportToJson}>
+                        Exporter JSON
                     </Button>
                 </div>
             </div>
@@ -558,6 +561,12 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
                 </Button>
                 <Button className="button-base button-reinitialiser" onClick={handleReset}>
                     Réinitialiser
+                </Button>
+                <Button className="button-base button-primary" onClick={handleExportToJson}>
+                    Exporter JSON
+                </Button>
+                <Button className="button-base button-reinitialiser" onClick={handleResetData}>
+                    Réinitialiser toutes les données
                 </Button>
             </div>
             <div className="day-buttons" style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '15px' }}>
@@ -729,14 +738,14 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
                     <thead>
                         <tr>
                             <th className="fixed-col header">DE</th>
-                            {config.timeSlots.map((slot, index) => (
+                            {(config.timeSlots || []).map((slot, index) => (
                                 <th key={slot} className="scrollable-col">{slot}</th>
                             ))}
                             <th className="fixed-col header">Total</th>
                         </tr>
                         <tr>
                             <th className="fixed-col header">A</th>
-                            {config.timeSlots.map((slot, index) => (
+                            {(config.timeSlots || []).map((slot, index) => (
                                 <th key={slot} className="scrollable-col">
                                     {index < config.timeSlots.length - 1
                                         ? config.timeSlots[index + 1]
@@ -750,7 +759,7 @@ const PlanningDisplay = ({ config, selectedShop, selectedWeek, selectedEmployees
                         {(loadFromLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, selectedEmployees || []) || []).map((employee, empIndex) => (
                             <tr key={employee}>
                                 <td className="fixed-col">{employee} ({calculateEmployeeDailyHours(employee, format(addDays(new Date(selectedWeek), currentDay), 'yyyy-MM-dd'), planning).toFixed(1)} h)</td>
-                                {config.timeSlots.map((_, slotIndex) => {
+                                {(config.timeSlots || []).map((_, slotIndex) => {
                                     const dayKey = format(addDays(new Date(selectedWeek), currentDay), 'yyyy-MM-dd');
                                     const isChecked = planning[employee]?.[dayKey]?.[slotIndex] || false;
                                     return (

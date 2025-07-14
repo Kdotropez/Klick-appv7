@@ -22,6 +22,7 @@ const EmployeeSelection = ({ onNext, onBack, onReset, selectedShop, selectedEmpl
     }, [selectedShop, selectedWeek, selectedEmployees]);
 
     const handleAddEmployee = () => {
+        console.log('handleAddEmployee appelé:', { newEmployee });
         if (!newEmployee.trim()) {
             setFeedback('Erreur: Veuillez entrer un nom d\'employé valide.');
             return;
@@ -43,6 +44,7 @@ const EmployeeSelection = ({ onNext, onBack, onReset, selectedShop, selectedEmpl
     };
 
     const handleEmployeeSelect = (employee) => {
+        console.log('handleEmployeeSelect appelé:', { employee });
         if (currentEmployees.includes(employee)) {
             setCurrentEmployees(currentEmployees.filter(emp => emp !== employee));
         } else {
@@ -52,6 +54,7 @@ const EmployeeSelection = ({ onNext, onBack, onReset, selectedShop, selectedEmpl
     };
 
     const handleNext = () => {
+        console.log('handleNext appelé, currentEmployees:', currentEmployees);
         if (currentEmployees.length === 0) {
             setFeedback('Erreur: Veuillez sélectionner au moins un employé.');
             return;
@@ -61,12 +64,12 @@ const EmployeeSelection = ({ onNext, onBack, onReset, selectedShop, selectedEmpl
     };
 
     const handleReset = () => {
-        console.log('Opening reset modal:', { employees });
+        console.log('handleReset appelé:', { employees });
         setShowResetModal(true);
     };
 
     const confirmReset = () => {
-        console.log('Confirm reset:', { resetEmployee, employees });
+        console.log('confirmReset appelé:', { resetEmployee, employees });
         if (!resetEmployee) {
             setFeedback('Erreur: Veuillez sélectionner une option.');
             return;
@@ -192,7 +195,10 @@ const EmployeeSelection = ({ onNext, onBack, onReset, selectedShop, selectedEmpl
                 )}
             </div>
             <div className="navigation-buttons" style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '20px' }}>
-                <Button className="button-base button-retour" onClick={onBack}>
+                <Button className="button-base button-retour" onClick={() => {
+                    console.log('Retour clicked in EmployeeSelection');
+                    onBack();
+                }}>
                     Retour
                 </Button>
                 <Button className="button-base button-primary" onClick={handleNext}>

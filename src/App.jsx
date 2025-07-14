@@ -1,306 +1,391 @@
 ﻿import { useState, useEffect } from 'react';
-import TimeSlotConfig from './components/steps/TimeSlotConfig';
+import { saveToLocalStorage, loadFromLocalStorage, cleanLocalStorage } from './utils/localStorage';
+import { saveToFirebase, loadFromFirebase } from './utils/firebase';
+import './assets/styles.css';
 import ShopSelection from './components/steps/ShopSelection';
 import WeekSelection from './components/steps/WeekSelection';
+import TimeSlotConfig from './components/steps/TimeSlotConfig';
 import EmployeeSelection from './components/steps/EmployeeSelection';
 import PlanningDisplay from './components/planning/PlanningDisplay';
-import { loadFromLocalStorage, saveToLocalStorage } from './utils/localStorage';
 import Button from './components/common/Button';
-import './assets/styles.css';
+import { format } from 'date-fns';
+import { saveAs } from 'file-saver';
 
-const App = () => {
-    const [step, setStep] = useState(1);
-    const [config, setConfig] = useState(loadFromLocalStorage('timeSlotConfig', {}) || {});
-    const [selectedShop, setSelectedShop] = useState(loadFromLocalStorage('selectedShop', '') || '');
-    const [selectedWeek, setSelectedWeek] = useState(loadFromLocalStorage('selectedWeek', '') || '');
-    const [selectedEmployees, setSelectedEmployees] = useState(loadFromLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, []) || []);
-    const [planning, setPlanning] = useState(loadFromLocalStorage(`planning_${selectedShop}_${selectedWeek}`, {}) || {});
-    const [feedback, setFeedback] = useState('');
-
-    useEffect(() => {
-        saveToLocalStorage('selectedShop', selectedShop);
-        saveToLocalStorage('selectedWeek', selectedWeek);
-        saveToLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, selectedEmployees);
-        saveToLocalStorage(`planning_${selectedShop}_${selectedWeek}`, planning);
-        console.log('Saved to localStorage:', { selectedShop, selectedWeek, selectedEmployees, planning });
-    }, [selectedShop, selectedEmployees, selectedWeek, planning]);
-
-    useEffect(() => {
-        if (selectedShop && selectedWeek) {
-            const newPlanning = loadFromLocalStorage(`planning_${selectedShop}_${selectedWeek}`, {}) || {};
-            setPlanning(newPlanning);
-            const newSelectedEmployees = loadFromLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, []) || [];
-            setSelectedEmployees(newSelectedEmployees);
-            console.log('Reloaded from localStorage:', {
-                planningKey: `planning_${selectedShop}_${selectedWeek}`,
-                planning: newPlanning,
-                employeesKey: `selected_employees_${selectedShop}_${selectedWeek}`,
-                employees: newSelectedEmployees
-            });
+// Main App component
+function App() {
+    const [shops, setShops] = useState([]);
+    const [selectedShop, setSelectedShop] = useState('');
+    const [selectedWeek, setSelectedWeek] = useState('');
+    const [timeSlotConfig, setTimeSlotConfig] = useState({});
+    // Initialize currentStep based on localStorage data
+    const [currentStep, setCurrentStep] = useState(() => {
+        const storedConfig = loadFromLocalStorage('timeSlotConfig');
+        const storedShop = loadFromLocalStorage('selectedShop');
+        const storedWeek = loadFromLocalStorage('selectedWeek');
+        const storedEmployees = loadFromLocalStorage(`selected_employees_${storedShop}_${storedWeek}`);
+        if (
+            storedConfig?.interval &&
+            Array.isArray(storedConfig?.timeSlots) &&
+            storedConfig.timeSlots.length > 0 &&
+            storedShop &&
+            storedWeek &&
+            Array.isArray(storedEmployees) &&
+            storedEmployees.length > 0
+        ) {
+            return 'planning';
         }
-    }, [selectedShop, selectedWeek]);
+        return 'config';
+    });
 
+    // Load data on mount
     useEffect(() => {
-        if (feedback) {
-            const timer = setTimeout(() => setFeedback(''), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [feedback]);
-
-    const handleNext = (data) => {
-        console.log('handleNext called with data:', data, 'for step:', step);
-        setFeedback('');
-        if (step === 1) {
-            setConfig(data);
-            setStep(step + 1);
-        } else if (step === 2) {
-            setSelectedShop(data);
-            setSelectedEmployees(loadFromLocalStorage(`selected_employees_${data}_${selectedWeek}`, []) || []);
-            setPlanning(loadFromLocalStorage(`planning_${data}_${selectedWeek}`, {}) || {});
-            saveToLocalStorage('selectedShop', data);
-            setStep(step + 1);
-        } else if (step === 3) {
-            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-            if (!data || !dateRegex.test(data) || isNaN(new Date(data).getTime())) {
-                setFeedback('Erreur: Veuillez sélectionner une semaine valide (format YYYY-MM-DD).');
-                console.log('Invalid week data:', data);
-                return;
+        const loadData = async () => {
+            console.log('Chargement des données...');
+            const firebaseData = await loadFromFirebase();
+            if (firebaseData) {
+                console.log('Données chargées depuis Firebase:', firebaseData);
+                setShops(firebaseData.shops || []);
+                setSelectedShop(firebaseData.selectedShop || '');
+                setSelectedWeek(firebaseData.selectedWeek || '');
+                setTimeSlotConfig(firebaseData.timeSlotConfig || {});
+                Object.keys(firebaseData).forEach(key => {
+                    if (key.startsWith('employees_') || key.startsWith('selected_employees_') || key.startsWith('planning_') || key.startsWith('copied_') || key.startsWith('lastPlanning_')) {
+                        saveToLocalStorage(key, firebaseData[key]);
+                    }
+                });
+            } else {
+                console.log('Aucune donnée Firebase, chargement depuis localStorage...');
+                setShops(loadFromLocalStorage('shops') || []);
+                setSelectedShop(loadFromLocalStorage('selectedShop') || '');
+                setSelectedWeek(loadFromLocalStorage('selectedWeek') || '');
+                setTimeSlotConfig(loadFromLocalStorage('timeSlotConfig') || {});
             }
-            setSelectedWeek(data);
-            setSelectedEmployees(loadFromLocalStorage(`selected_employees_${selectedShop}_${data}`, []) || []);
-            setPlanning(loadFromLocalStorage(`planning_${selectedShop}_${data}`, {}) || {});
-            setStep(step + 1);
-        } else if (step === 4) {
-            setSelectedEmployees(data);
-            saveToLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, data);
-            setPlanning(loadFromLocalStorage(`planning_${selectedShop}_${selectedWeek}`, {}) || {});
-            setStep(step + 1);
+        };
+        loadData();
+    }, []);
+
+    // Save data to Firebase on state changes
+    useEffect(() => {
+        console.log('Sauvegarde des données sur Firebase, timeSlotConfig:', timeSlotConfig);
+        const data = {
+            shops,
+            selectedShop,
+            selectedWeek,
+            timeSlotConfig,
+            ...Object.fromEntries(
+                Object.keys(localStorage).filter(key =>
+                    key.startsWith('employees_') ||
+                    key.startsWith('selected_employees_') ||
+                    key.startsWith('planning_') ||
+                    key.startsWith('copied_') ||
+                    key.startsWith('lastPlanning_')
+                ).map(key => [key, loadFromLocalStorage(key)])
+            )
+        };
+        saveToFirebase(data);
+    }, [shops, selectedShop, selectedWeek, timeSlotConfig]);
+
+    // Save data to Firebase on window close
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            console.log('Sauvegarde avant fermeture, timeSlotConfig:', timeSlotConfig);
+            const data = {
+                shops,
+                selectedShop,
+                selectedWeek,
+                timeSlotConfig,
+                ...Object.fromEntries(
+                    Object.keys(localStorage).filter(key =>
+                        key.startsWith('employees_') ||
+                        key.startsWith('selected_employees_') ||
+                        key.startsWith('planning_') ||
+                        key.startsWith('copied_') ||
+                        key.startsWith('lastPlanning_')
+                    ).map(key => [key, loadFromLocalStorage(key)])
+                )
+            };
+            saveToFirebase(data);
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [shops, selectedShop, selectedWeek, timeSlotConfig]);
+
+    // Handle adding a shop
+    const handleAddShop = (shopName) => {
+        console.log('handleAddShop appelé:', { shopName });
+        if (shopName && !shops.includes(shopName)) {
+            const newShops = [...shops, shopName];
+            setShops(newShops);
+            saveToLocalStorage('shops', newShops);
+            setSelectedShop(shopName);
+            setCurrentStep('week');
         }
     };
 
-    const handleBack = () => {
-        console.log('handleBack called, current step:', step);
-        if (step > 1) {
-            setStep(step - 1);
-            const storedSelectedShop = loadFromLocalStorage('selectedShop', '') || '';
-            setSelectedShop(storedSelectedShop);
-            setSelectedEmployees(loadFromLocalStorage(`selected_employees_${storedSelectedShop}_${selectedWeek}`, []) || []);
-            setPlanning(loadFromLocalStorage(`planning_${storedSelectedShop}_${selectedWeek}`, {}) || {});
-            console.log('Returning to step:', step - 1, 'Restored selectedShop:', storedSelectedShop, 'Restored employees:', loadFromLocalStorage(`selected_employees_${storedSelectedShop}_${selectedWeek}`, []));
-        }
+    // Handle selecting a shop
+    const handleSelectShop = (shop) => {
+        console.log('handleSelectShop appelé:', { shop });
+        setSelectedShop(shop);
+        saveToLocalStorage('selectedShop', shop);
+        setCurrentStep('week');
     };
 
-    const handleBackToShop = () => {
-        console.log('handleBackToShop called');
-        setStep(2);
-        const storedSelectedShop = loadFromLocalStorage('selectedShop', '') || '';
-        setSelectedShop(storedSelectedShop);
-        setSelectedEmployees(loadFromLocalStorage(`selected_employees_${storedSelectedShop}_${selectedWeek}`, []) || []);
-        setPlanning(loadFromLocalStorage(`planning_${storedSelectedShop}_${selectedWeek}`, {}) || {});
-        console.log('Restored selectedShop:', storedSelectedShop, 'Restored employees:', loadFromLocalStorage(`selected_employees_${storedSelectedShop}_${selectedWeek}`, []));
-    };
-
-    const handleBackToWeek = () => {
-        console.log('handleBackToWeek called');
-        setStep(3);
-        setSelectedWeek(loadFromLocalStorage('selectedWeek', '') || '');
-        setSelectedEmployees(loadFromLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, []) || []);
-        setPlanning(loadFromLocalStorage(`planning_${selectedShop}_${selectedWeek}`, {}) || {});
-    };
-
-    const handleBackToConfig = () => {
-        console.log('handleBackToConfig called');
-        setStep(1);
-        setConfig(loadFromLocalStorage('timeSlotConfig', {}) || {});
-        setPlanning(loadFromLocalStorage(`planning_${selectedShop}_${selectedWeek}`, {}) || {});
-    };
-
-    const handleReset = ({ feedback: resetFeedback }) => {
-        setConfig({});
+    // Handle deleting a shop
+    const handleDeleteShop = (shop) => {
+        console.log('handleDeleteShop appelé:', { shop });
+        const newShops = shops.filter(s => s !== shop);
+        setShops(newShops);
         setSelectedShop('');
-        setSelectedWeek('');
-        setSelectedEmployees([]);
-        setPlanning({});
-        setStep(1);
-        localStorage.clear();
-        setFeedback(resetFeedback || 'Succès: Toutes les données ont été réinitialisées.');
-        console.log('Reset all data and cleared localStorage');
+        saveToLocalStorage('shops', newShops);
+        saveToLocalStorage('selectedShop', '');
+        localStorage.removeItem(`employees_${shop}`);
+        localStorage.removeItem(`selected_employees_${shop}_${selectedWeek}`);
+        localStorage.removeItem(`planning_${shop}_${selectedWeek}`);
+        setCurrentStep('config');
     };
 
-    const exportLocalStorage = () => {
-        const data = {};
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            data[key] = loadFromLocalStorage(key, null);
+    // Handle selecting a week
+    const handleSelectWeek = (week) => {
+        console.log('handleSelectWeek appelé:', { week, timeSlotConfig });
+        setSelectedWeek(week);
+        saveToLocalStorage('selectedWeek', week);
+        if (
+            timeSlotConfig?.interval &&
+            Array.isArray(timeSlotConfig?.timeSlots) &&
+            timeSlotConfig.timeSlots.length > 0
+        ) {
+            console.log('timeSlotConfig valide dans l\'état, passage à employees:', timeSlotConfig);
+            setCurrentStep('employees');
+        } else {
+            console.log('timeSlotConfig non valide dans l\'état, passage à config:', timeSlotConfig);
+            setCurrentStep('config');
         }
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `planning_export_${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        setFeedback('Succès: Données exportées avec succès dans votre dossier de téléchargement.');
     };
 
+    // Handle setting time slot configuration
+    const handleSetTimeSlotConfig = (config) => {
+        console.log('handleSetTimeSlotConfig appelé:', { config });
+        setTimeSlotConfig(config);
+        saveToLocalStorage('timeSlotConfig', config);
+        setCurrentStep('shop');
+    };
+
+    // Handle navigation to next step
+    const goToNextStep = () => {
+        console.log('goToNextStep appelé, étape actuelle:', currentStep);
+        const steps = ['config', 'shop', 'week', 'employees', 'planning'];
+        const currentIndex = steps.indexOf(currentStep);
+        if (currentIndex < steps.length - 1) {
+            setCurrentStep(steps[currentIndex + 1]);
+            console.log('Nouvelle étape:', steps[currentIndex + 1]);
+        }
+    };
+
+    // Handle navigation to previous step
+    const goToPreviousStep = () => {
+        console.log('goToPreviousStep appelé, étape actuelle:', currentStep);
+        const steps = ['config', 'shop', 'week', 'employees', 'planning'];
+        const currentIndex = steps.indexOf(currentStep);
+        if (currentIndex > 0) {
+            setCurrentStep(steps[currentIndex - 1]);
+            console.log('Nouvelle étape:', steps[currentIndex - 1]);
+        }
+    };
+
+    // Export data to JSON
+    const handleExportToJson = () => {
+        console.log('handleExportToJson appelé');
+        const data = {
+            shops,
+            selectedShop,
+            selectedWeek,
+            timeSlotConfig,
+            ...Object.fromEntries(
+                Object.keys(localStorage).filter(key =>
+                    key.startsWith('employees_') ||
+                    key.startsWith('selected_employees_') ||
+                    key.startsWith('planning_') ||
+                    key.startsWith('copied_') ||
+                    key.startsWith('lastPlanning_')
+                ).map(key => [key, loadFromLocalStorage(key)])
+            )
+        };
+        const fileData = JSON.stringify(data, null, 2);
+        const blob = new Blob([fileData], { type: 'application/json' });
+        saveAs(blob, `planning_export_${format(new Date(), 'yyyy-MM-dd')}.json`);
+    };
+
+    // Import data from JSON
+    const handleImportFromJson = (event) => {
+        console.log('Import JSON déclenché', event.target.files);
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                console.log('Fichier lu', e.target.result);
+                try {
+                    const data = JSON.parse(e.target.result);
+                    const errors = validateImportedData(data);
+                    if (errors.length > 0) {
+                        console.error('Erreurs de validation:', errors);
+                        alert(`Erreur dans les données importées:\n${errors.join('\n')}`);
+                        return;
+                    }
+                    cleanLocalStorage();
+                    Object.keys(data).forEach(key => {
+                        console.log(`Saving to localStorage: ${key}`, data[key]);
+                        saveToLocalStorage(key, data[key]);
+                        if (key === 'shops') setShops(data[key]);
+                        else if (key === 'selectedShop') setSelectedShop(data[key]);
+                        else if (key === 'selectedWeek') setSelectedWeek(data[key]);
+                        else if (key === 'timeSlotConfig') setTimeSlotConfig(data[key] || {});
+                    });
+                    saveToFirebase(data);
+                    console.log('Données importées, timeSlotConfig:', data.timeSlotConfig);
+                    if (
+                        data.timeSlotConfig?.interval &&
+                        Array.isArray(data.timeSlotConfig?.timeSlots) &&
+                        data.timeSlotConfig.timeSlots.length > 0 &&
+                        data.selectedShop &&
+                        data.selectedWeek &&
+                        data[`selected_employees_${data.selectedShop}_${data.selectedWeek}`]?.length > 0
+                    ) {
+                        setCurrentStep('planning');
+                    } else {
+                        setCurrentStep('config');
+                    }
+                    alert('Succès: Données importées avec succès depuis le fichier JSON');
+                } catch (error) {
+                    console.error('Erreur lors de la lecture du JSON:', error);
+                    alert('Erreur: Impossible de lire le fichier JSON');
+                }
+            };
+            reader.readAsText(file);
+        }
+    };
+
+    // Validate imported data
     const validateImportedData = (data) => {
         const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-        const validKeys = ['shops', 'selectedWeek', 'timeSlotConfig'];
+        const validKeys = [
+            'shops',
+            'selectedWeek',
+            'timeSlotConfig',
+            'selectedShop',
+            'selected_employees__2025-07-07',
+            'planning__2025-07-07',
+            'lastPlanning_PORT GRIMAUD',
+            'copied_PORT GRIMAUD_2025-07-14'
+        ];
         const errors = [];
 
         for (const key in data) {
             if (!validKeys.includes(key) && !key.startsWith('employees_') && !key.startsWith('selected_employees_') && !key.startsWith('planning_') && !key.startsWith('copied_') && !key.startsWith('lastPlanning_')) {
                 errors.push(`Clé non reconnue: ${key}`);
             }
-            if (key.startsWith('planning_') || key === 'selectedWeek') {
-                const datePart = key.startsWith('planning_') ? key.split('_')[2] : data[key];
-                if (datePart && (!dateRegex.test(datePart) || isNaN(new Date(datePart).getTime()))) {
-                    errors.push(`Date invalide dans ${key}: ${datePart}`);
-                }
-            }
             if (key === 'shops' && !Array.isArray(data[key])) {
-                errors.push('La clé "shops" doit être un tableau.');
+                errors.push('Les boutiques doivent être un tableau');
             }
-            if (key === 'timeSlotConfig') {
-                const config = data[key];
-                if (!config || typeof config !== 'object' || !config.interval || !config.startTime || !config.endTime || !Array.isArray(config.timeSlots)) {
-                    errors.push('La clé "timeSlotConfig" doit contenir interval, startTime, endTime et timeSlots.');
+            if (key === 'selectedWeek' && data[key] && !dateRegex.test(data[key])) {
+                errors.push('La semaine sélectionnée doit être au format yyyy-MM-dd');
+            }
+            if (key === 'timeSlotConfig' && data[key]) {
+                if (!data[key].interval || !data[key].startTime || !data[key].endTime || !Array.isArray(data[key].timeSlots)) {
+                    errors.push('timeSlotConfig doit contenir interval, startTime, endTime, et timeSlots (tableau)');
                 }
+            }
+            if (key === 'selectedShop' && data[key] && !data.shops.includes(data[key])) {
+                errors.push('selectedShop doit être une boutique valide dans shops');
             }
             if (key.startsWith('employees_') && !Array.isArray(data[key])) {
-                errors.push(`La clé ${key} doit être un tableau.`);
+                errors.push(`Les employés (${key}) doivent être un tableau`);
             }
             if (key.startsWith('selected_employees_') && !Array.isArray(data[key])) {
-                errors.push(`La clé ${key} doit être un tableau.`);
+                errors.push(`Les employés sélectionnés (${key}) doivent être un tableau`);
             }
         }
-
-        return errors.length === 0 ? null : errors.join('; ');
+        return errors;
     };
 
-    const importLocalStorage = (event) => {
-        const file = event.target.files[0];
-        if (!file) {
-            setFeedback('Erreur: Aucun fichier sélectionné.');
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-                const validationError = validateImportedData(data);
-                if (validationError) {
-                    setFeedback(`Erreur: Erreur dans les données importées: ${validationError}`);
-                    console.error('Validation error:', validationError);
-                    return;
-                }
-
-                localStorage.clear();
-                for (const key in data) {
-                    saveToLocalStorage(key, data[key]);
-                }
-                setConfig(loadFromLocalStorage('timeSlotConfig', {}) || {});
-                setSelectedShop(loadFromLocalStorage('selectedShop', '') || '');
-                setSelectedWeek(loadFromLocalStorage('selectedWeek', '') || '');
-                setSelectedEmployees(loadFromLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, []) || []);
-                setPlanning(loadFromLocalStorage(`planning_${selectedShop}_${selectedWeek}`, {}) || {});
-                setFeedback('Succès: Données importées avec succès depuis le fichier JSON.');
-            } catch (error) {
-                setFeedback('Erreur: Erreur de lecture du fichier JSON.');
-                console.error('Error reading JSON file:', error);
-            }
-        };
-        reader.readAsText(file);
+    // Reset all data
+    const handleResetData = () => {
+        console.log('handleResetData appelé');
+        cleanLocalStorage();
+        setShops([]);
+        setSelectedShop('');
+        setSelectedWeek('');
+        setTimeSlotConfig({});
+        saveToFirebase({});
+        setCurrentStep('config');
+        alert('Toutes les données ont été réinitialisées');
     };
 
     return (
-        <div className="app-container">
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '15px' }}>
-                <Button
-                    className="button-base button-primary"
-                    onClick={exportLocalStorage}
-                    style={{ backgroundColor: '#1e88e5', color: '#fff', padding: '8px 16px', fontSize: '14px' }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1565c0'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1e88e5'}
-                >
-                    Exporter
-                </Button>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                        type="file"
-                        accept=".json"
-                        onChange={importLocalStorage}
-                        style={{ display: 'none' }}
-                    />
-                    <Button
-                        className="button-base button-primary"
-                        onClick={(e) => e.target.previousSibling.click()}
-                        style={{ backgroundColor: '#1e88e5', color: '#fff', padding: '8px 16px', fontSize: '14px' }}
-                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1565c0'}
-                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1e88e5'}
-                    >
-                        Importer
-                    </Button>
-                </label>
-            </div>
-            {feedback && (
-                <p style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center', color: feedback.includes('Succès') ? '#4caf50' : '#e53935', marginBottom: '10px' }}>
-                    {feedback}
-                </p>
-            )}
-            {step === 1 && (
+        <div className="app">
+            <h1>Planning App</h1>
+            {currentStep === 'config' && (
                 <TimeSlotConfig
-                    onNext={handleNext}
-                    onReset={handleReset}
-                    config={config}
+                    timeSlotConfig={timeSlotConfig}
+                    setTimeSlotConfig={handleSetTimeSlotConfig}
+                    onBack={goToPreviousStep}
+                    onNext={goToNextStep}
+                    onReset={handleResetData}
+                    config={timeSlotConfig}
+                    handleImportFromJson={handleImportFromJson}
                 />
             )}
-            {step === 2 && (
+            {currentStep === 'shop' && (
                 <ShopSelection
-                    onNext={handleNext}
-                    onBack={handleBack}
-                    onReset={handleReset}
+                    shops={shops}
                     selectedShop={selectedShop}
+                    onAddShop={handleAddShop}
+                    onSelectShop={handleSelectShop}
+                    onDeleteShop={handleDeleteShop}
+                    onNext={goToNextStep}
+                    onBack={goToPreviousStep}
+                    onReset={handleResetData}
                 />
             )}
-            {step === 3 && (
+            {currentStep === 'week' && (
                 <WeekSelection
-                    onNext={handleNext}
-                    onBack={handleBack}
-                    onReset={handleReset}
                     selectedWeek={selectedWeek}
+                    onSelectWeek={handleSelectWeek}
+                    onBack={goToPreviousStep}
+                    onNext={goToNextStep}
                     selectedShop={selectedShop}
+                    onReset={handleResetData}
                 />
             )}
-            {step === 4 && (
+            {currentStep === 'employees' && (
                 <EmployeeSelection
-                    onNext={handleNext}
-                    onBack={handleBack}
-                    onReset={handleReset}
+                    shop={selectedShop}
+                    selectedWeek={selectedWeek}
+                    onBack={goToPreviousStep}
+                    onNext={goToNextStep}
+                    onReset={handleResetData}
                     selectedShop={selectedShop}
-                    selectedEmployees={selectedEmployees}
+                    selectedEmployees={loadFromLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, [])}
                     selectedWeek={selectedWeek}
                 />
             )}
-            {step === 5 && (
+            {currentStep === 'planning' && selectedShop && selectedWeek && timeSlotConfig?.interval && Array.isArray(timeSlotConfig?.timeSlots) && timeSlotConfig.timeSlots.length > 0 && (
                 <PlanningDisplay
-                    config={config}
-                    selectedShop={selectedShop}
+                    config={timeSlotConfig}
+                    shop={selectedShop}
                     selectedWeek={selectedWeek}
-                    selectedEmployees={selectedEmployees}
-                    planning={planning}
-                    onBack={handleBack}
-                    onBackToShop={handleBackToShop}
-                    onBackToWeek={handleBackToWeek}
-                    onBackToConfig={handleBackToConfig}
-                    onReset={handleReset}
+                    selectedEmployees={loadFromLocalStorage(`selected_employees_${selectedShop}_${selectedWeek}`, [])}
+                    planning={loadFromLocalStorage(`planning_${selectedShop}_${selectedWeek}`, {})}
+                    onBack={goToPreviousStep}
+                    onBackToShop={() => setCurrentStep('shop')}
+                    onBackToWeek={() => setCurrentStep('week')}
+                    onBackToConfig={() => setCurrentStep('config')}
+                    onReset={() => setCurrentStep('employees')}
+                    handleExportToJson={handleExportToJson}
+                    handleResetData={handleResetData}
                 />
             )}
-            <p style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center', marginTop: '20px', fontSize: '14px', color: '#333' }}>
-                Klick-Planning - copyright © Nicolas Lefevre
-            </p>
         </div>
     );
-};
+}
 
 export default App;

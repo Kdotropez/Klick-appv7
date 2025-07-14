@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from 'react';
-import { format, startOfMonth, endOfMonth, startOfWeek, addDays, isMonday } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { saveToLocalStorage, loadFromLocalStorage } from '../../utils/localStorage';
 import Button from '../common/Button';
@@ -12,8 +12,8 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
     const [feedback, setFeedback] = useState('');
 
     useEffect(() => {
-        // Charger les semaines sauvegardées pour la boutique sélectionnée
-        console.log('Fetching saved weeks for shop:', selectedShop);
+        console.log('useEffect déclenché pour savedWeeks, selectedShop:', selectedShop, 'selectedWeek:', selectedWeek);
+        console.log('localStorage content:', Object.keys(localStorage));
         const storageKeys = Object.keys(localStorage).filter(key => key.startsWith(`planning_${selectedShop}_`));
         console.log('Found storage keys:', storageKeys);
 
@@ -23,18 +23,18 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
                 console.log('Processing key:', key, 'Extracted weekKey:', weekKey);
                 try {
                     const weekDate = new Date(weekKey);
-                    const weekPlanning = loadFromLocalStorage(key);
+                    const weekPlanning = JSON.parse(localStorage.getItem(key) || '{}');
                     console.log(`Week data for ${weekKey}:`, weekPlanning);
-                    if (!isNaN(weekDate.getTime()) && weekPlanning && Object.keys(weekPlanning).length > 0) {
+                    if (!isNaN(weekDate.getTime())) {
                         return {
                             key: weekKey,
                             display: `Lundi ${format(weekDate, 'd MMMM', { locale: fr })} au Dimanche ${format(addDays(weekDate, 6), 'd MMMM yyyy', { locale: fr })}`
                         };
                     }
-                    console.log(`Skipping ${weekKey}: Invalid date or empty planning`);
+                    console.log(`Skipping ${weekKey}: Invalid date`);
                     return null;
                 } catch (e) {
-                    console.error(`Invalid date format for key ${key}:`, e);
+                    console.error(`Error processing key ${key}:`, e);
                     return null;
                 }
             })
@@ -42,9 +42,11 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
             .sort((a, b) => new Date(a.key) - new Date(b.key));
         console.log('Processed saved weeks:', weeks);
         setSavedWeeks(weeks);
-    }, [selectedShop]);
+        console.log('savedWeeks updated:', weeks);
+    }, [selectedShop, selectedWeek]);
 
     const handleMonthChange = (e) => {
+        console.log('handleMonthChange appelé:', e.target.value);
         setMonth(e.target.value);
         setCurrentWeek('');
     };
@@ -53,31 +55,42 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
         const monthStart = startOfMonth(new Date(month));
         const monthEnd = endOfMonth(new Date(month));
         const weeks = [];
-        let current = startOfWeek(monthStart, { weekStartsOn: 1 }); // Commence par un lundi
+        let current = startOfWeek(monthStart, { weekStartsOn: 1 });
         while (current <= monthEnd) {
-            if (isMonday(current)) {
-                weeks.push({
-                    key: format(current, 'yyyy-MM-dd'),
-                    display: `Lundi ${format(current, 'd MMMM', { locale: fr })} au Dimanche ${format(addDays(current, 6), 'd MMMM yyyy', { locale: fr })}`
-                });
-            }
+            weeks.push({
+                key: format(current, 'yyyy-MM-dd'),
+                display: `Lundi ${format(current, 'd MMMM', { locale: fr })} au Dimanche ${format(addDays(current, 6), 'd MMMM yyyy', { locale: fr })}`
+            });
             current = addDays(current, 7);
         }
+        console.log('Weeks in month:', weeks);
         return weeks;
     };
 
     const handleWeekSelect = (weekKey) => {
+        console.log('handleWeekSelect appelé:', { weekKey });
         setCurrentWeek(weekKey);
         setFeedback('');
     };
 
     const handleNext = () => {
+        console.log('handleNext appelé, currentWeek:', currentWeek);
         if (!currentWeek) {
-            setFeedback('Erreur: Veuillez selectionner une semaine.');
+            setFeedback('Erreur: Veuillez sélectionner une semaine.');
             return;
         }
         onNext(currentWeek);
     };
+
+    const handleReset = () => {
+        console.log('handleReset appelé');
+        setCurrentWeek('');
+        setMonth(format(new Date(), 'yyyy-MM'));
+        setFeedback('Succès: Toutes les données ont été réinitialisées.');
+        onReset({ feedback: 'Succès: Toutes les données ont été réinitialisées.' });
+    };
+
+    console.log('Rendering WeekSelection, savedWeeks:', savedWeeks);
 
     return (
         <div className="week-selection-container">
@@ -99,10 +112,10 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
                 {selectedShop || 'Aucune boutique sélectionnée'}
             </div>
             <h2 style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center' }}>
-                Selection de la semaine
+                Sélection de la semaine
             </h2>
             {feedback && (
-                <p style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center', color: feedback.includes('Succes') ? '#4caf50' : '#e53935', marginBottom: '10px' }}>
+                <p style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center', color: feedback.includes('Succès') ? '#4caf50' : '#e53935', marginBottom: '10px' }}>
                     {feedback}
                 </p>
             )}
@@ -150,10 +163,10 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
                 </ul>
             </div>
             <div className="saved-weeks" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
-                <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: '16px', marginBottom: '10px' }}>Semaines sauvegardees</h3>
+                <h3 style={{ fontFamily: 'Roboto, sans-serif', fontSize: '16px', marginBottom: '10px' }}>Semaines sauvegardées</h3>
                 {savedWeeks.length === 0 ? (
                     <p style={{ fontFamily: 'Roboto, sans-serif', color: '#e53935', textAlign: 'center' }}>
-                        Aucune semaine sauvegardee pour cette boutique.
+                        Aucune semaine sauvegardée pour cette boutique.
                     </p>
                 ) : (
                     <ul style={{ listStyle: 'none', padding: 0, width: '100%', maxWidth: '600px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -190,14 +203,17 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
                 )}
             </div>
             <div className="navigation-buttons" style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '20px' }}>
-                <Button className="button-base button-retour" onClick={onBack}>
+                <Button className="button-base button-retour" onClick={() => {
+                    console.log('Retour clicked in WeekSelection');
+                    onBack();
+                }}>
                     Retour
                 </Button>
                 <Button className="button-base button-primary" onClick={handleNext}>
                     Valider
                 </Button>
-                <Button className="button-base button-reinitialiser" onClick={() => onReset({ feedback: 'Succes: Toutes les donnees ont ete reinitialisees.' })}>
-                    Reinitialiser
+                <Button className="button-base button-reinitialiser" onClick={handleReset}>
+                    Réinitialiser
                 </Button>
             </div>
         </div>

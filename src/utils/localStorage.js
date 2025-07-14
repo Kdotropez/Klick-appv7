@@ -1,46 +1,30 @@
-﻿export const saveToLocalStorage = (key, data) => {
+﻿export const saveToLocalStorage = (key, value) => {
     try {
-        localStorage.setItem(key, JSON.stringify(data));
-        console.log(`Saved to localStorage: ${key}`, data);
+        console.log(`Saving to localStorage: ${key}`, value);
+        localStorage.setItem(key, JSON.stringify(value));
+        console.log(`Successfully saved ${key} to localStorage`);
     } catch (error) {
-        console.error('Erreur localStorage (save):', error);
+        console.error('Error saving to localStorage:', error, { key, value });
     }
 };
 
-export const loadFromLocalStorage = (key, defaultValue) => {
+export const loadFromLocalStorage = (key, defaultValue = null) => {
     try {
-        const data = localStorage.getItem(key);
-        if (data === null || data === '') {
-            return defaultValue;
-        }
-        return JSON.parse(data);
+        const value = localStorage.getItem(key);
+        console.log(`Loading from localStorage: ${key}`, value);
+        return value ? JSON.parse(value) : defaultValue;
     } catch (error) {
-        console.error('Erreur localStorage (load):', error);
+        console.error('Error loading from localStorage:', error, { key });
         return defaultValue;
     }
 };
 
 export const cleanLocalStorage = () => {
-    const validKeys = [];
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (
-            key.startsWith('shops') ||
-            key.startsWith('employees_') ||
-            key.startsWith('selectedWeek') ||
-            key.startsWith('timeSlotConfig') ||
-            key.startsWith('copied_') ||
-            (key.startsWith('planning_') && dateRegex.test(key.split('_')[2])) ||
-            (key.startsWith('lastPlanning_') && key.split('_').length === 3)
-        ) {
-            validKeys.push(key);
-        }
+    try {
+        console.log('Cleaning localStorage');
+        localStorage.clear();
+        console.log('localStorage cleared');
+    } catch (error) {
+        console.error('Error cleaning localStorage:', error);
     }
-    Object.keys(localStorage).forEach(key => {
-        if (!validKeys.includes(key)) {
-            localStorage.removeItem(key);
-            console.log(`Removed invalid key from localStorage: ${key}`);
-        }
-    });
 };

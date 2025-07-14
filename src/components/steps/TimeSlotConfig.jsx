@@ -4,7 +4,7 @@ import Button from '../common/Button';
 import { saveToLocalStorage } from '../../utils/localStorage';
 import '../../assets/styles.css';
 
-const TimeSlotConfig = ({ onNext, onReset, config }) => {
+const TimeSlotConfig = ({ onNext, onBack, onReset, config, handleImportFromJson }) => {
     const [interval, setInterval] = useState(config?.interval || 15);
     const [startTime, setStartTime] = useState(config?.startTime || '09:00');
     const [endTime, setEndTime] = useState(config?.endTime || '19:00');
@@ -15,7 +15,6 @@ const TimeSlotConfig = ({ onNext, onReset, config }) => {
     const endTimes = ['19:00', '20:00', '22:00', '23:00', '24:00', '01:00', '02:00', '03:00', 'other'];
 
     const validateTimeFormat = (time) => {
-        // Accepter les heures de 00:00 à 23:59, 24:00, et 00:00 à 03:00
         const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$|^24:00$|^0[0-3]:[0-5][0-9]$/;
         return timeRegex.test(time);
     };
@@ -36,6 +35,7 @@ const TimeSlotConfig = ({ onNext, onReset, config }) => {
     };
 
     const handleValidate = () => {
+        console.log('handleValidate appelé:', { interval, startTime, endTime });
         if (!validateTimeFormat(startTime)) {
             setError('Heure de début invalide (HH:mm).');
             return;
@@ -67,6 +67,7 @@ const TimeSlotConfig = ({ onNext, onReset, config }) => {
     };
 
     const handleReset = () => {
+        console.log('handleReset appelé');
         setInterval(15);
         setStartTime('09:00');
         setEndTime('19:00');
@@ -192,23 +193,38 @@ const TimeSlotConfig = ({ onNext, onReset, config }) => {
             </div>
             <div className="button-group" style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '15px' }}>
                 <Button
+                    className="button-base button-retour"
+                    onClick={() => {
+                        console.log('Retour clicked in TimeSlotConfig');
+                        onBack();
+                    }}
+                >
+                    Retour
+                </Button>
+                <Button
                     className="button-base button-primary"
                     onClick={handleValidate}
-                    style={{ backgroundColor: '#1e88e5', color: '#fff', padding: '8px 16px', fontSize: '14px' }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1565c0'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#1e88e5'}
                 >
                     Valider
                 </Button>
                 <Button
                     className="button-base button-reinitialiser"
                     onClick={handleReset}
-                    style={{ backgroundColor: '#e53935', color: '#fff', padding: '8px 16px', fontSize: '14px' }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#d32f2f'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#e53935'}
                 >
                     Réinitialiser
                 </Button>
+                <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportFromJson}
+                    style={{ display: 'none' }}
+                    id="import-json"
+                />
+                <label htmlFor="import-json">
+                    <Button as="span" className="button-base button-primary">
+                        Importer JSON
+                    </Button>
+                </label>
             </div>
         </div>
     );

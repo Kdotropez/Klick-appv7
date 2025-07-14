@@ -12,20 +12,20 @@ const ShopSelection = ({ onNext, onBack, onReset, selectedShop }) => {
     const [resetShop, setResetShop] = useState('');
 
     useEffect(() => {
-        // Charger les boutiques sauvegardées
         const storedShops = loadFromLocalStorage('shops', []) || [];
         setShops(storedShops);
         console.log('Loaded shops:', storedShops);
     }, []);
 
     const handleAddShop = () => {
+        console.log('handleAddShop appelé:', { newShop });
         if (!newShop.trim()) {
             setFeedback('Erreur: Veuillez entrer un nom de boutique valide.');
             return;
         }
         const newShopUpperCase = newShop.trim().toUpperCase();
         if (shops.includes(newShopUpperCase)) {
-            setFeedback('Erreur: Cette boutique existe deja.');
+            setFeedback('Erreur: Cette boutique existe déjà.');
             return;
         }
 
@@ -34,60 +34,56 @@ const ShopSelection = ({ onNext, onBack, onReset, selectedShop }) => {
         saveToLocalStorage('shops', updatedShops);
         setCurrentShop(newShopUpperCase);
         setNewShop('');
-        setFeedback('Succes: Boutique ajoutee avec succes.');
+        setFeedback('Succès: Boutique ajoutée avec succès.');
         console.log('Added new shop:', newShopUpperCase, 'Updated shops:', updatedShops);
-
-        // Valider automatiquement la nouvelle boutique
         onNext(newShopUpperCase);
     };
 
     const handleShopSelect = (shop) => {
+        console.log('handleShopSelect appelé:', { shop });
         setCurrentShop(shop);
         setFeedback('');
     };
 
     const handleNext = () => {
+        console.log('handleNext appelé, currentShop:', currentShop);
         if (!currentShop) {
-            setFeedback('Erreur: Veuillez selectionner une boutique.');
+            setFeedback('Erreur: Veuillez sélectionner une boutique.');
             return;
         }
         onNext(currentShop);
     };
 
     const handleReset = () => {
-        console.log('Opening reset modal:', { shops });
+        console.log('handleReset appelé:', { shops });
         setShowResetModal(true);
     };
 
     const confirmReset = () => {
-        console.log('Confirm reset:', { resetShop, shops });
+        console.log('confirmReset appelé:', { resetShop, shops });
         if (!resetShop) {
-            setFeedback('Erreur: Veuillez selectionner une option.');
+            setFeedback('Erreur: Veuillez sélectionner une option.');
             return;
         }
 
         if (resetShop === 'all') {
-            // Réinitialiser toutes les boutiques
             setShops([]);
             setCurrentShop('');
-            setFeedback('Succes: Toutes les boutiques ont ete reinitialisees.');
+            setFeedback('Succès: Toutes les boutiques ont été réinitialisées.');
             saveToLocalStorage('shops', []);
-            // Supprimer toutes les clés associées aux boutiques
             const keysToRemove = Object.keys(localStorage).filter(key =>
                 key.startsWith('employees_') || key.startsWith('planning_') || key.startsWith('copied_') || key.startsWith('lastPlanning_')
             );
             keysToRemove.forEach(key => localStorage.removeItem(key));
             console.log('Cleared all shop-related data from localStorage');
         } else {
-            // Réinitialiser une boutique spécifique
             const updatedShops = shops.filter(shop => shop !== resetShop);
             setShops(updatedShops);
             saveToLocalStorage('shops', updatedShops);
             if (currentShop === resetShop) {
                 setCurrentShop('');
             }
-            setFeedback(`Succes: Boutique ${resetShop} reinitialisee.`);
-            // Supprimer les clés associées à la boutique
+            setFeedback(`Succès: Boutique ${resetShop} réinitialisée.`);
             const keysToRemove = Object.keys(localStorage).filter(key =>
                 key.startsWith(`employees_${resetShop}`) ||
                 key.startsWith(`planning_${resetShop}_`) ||
@@ -105,10 +101,10 @@ const ShopSelection = ({ onNext, onBack, onReset, selectedShop }) => {
     return (
         <div className="shop-selection-container">
             <h2 style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center' }}>
-                Selection de la boutique
+                Sélection de la boutique
             </h2>
             {feedback && (
-                <p style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center', color: feedback.includes('Succes') ? '#4caf50' : '#e53935', marginBottom: '10px' }}>
+                <p style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center', color: feedback.includes('Succès') ? '#4caf50' : '#e53935', marginBottom: '10px' }}>
                     {feedback}
                 </p>
             )}
@@ -172,14 +168,17 @@ const ShopSelection = ({ onNext, onBack, onReset, selectedShop }) => {
                 )}
             </div>
             <div className="navigation-buttons" style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '20px' }}>
-                <Button className="button-base button-retour" onClick={onBack}>
+                <Button className="button-base button-retour" onClick={() => {
+                    console.log('Retour clicked in ShopSelection');
+                    onBack();
+                }}>
                     Retour
                 </Button>
                 <Button className="button-base button-primary" onClick={handleNext}>
                     Valider
                 </Button>
                 <Button className="button-base button-reinitialiser" onClick={handleReset}>
-                    Reinitialiser
+                    Réinitialiser
                 </Button>
             </div>
             {showResetModal && (
@@ -189,10 +188,10 @@ const ShopSelection = ({ onNext, onBack, onReset, selectedShop }) => {
                             ✕
                         </button>
                         <h3 style={{ fontFamily: 'Roboto, sans-serif', textAlign: 'center' }}>
-                            Confirmer la reinitialisation
+                            Confirmer la réinitialisation
                         </h3>
                         <div className="form-group">
-                            <label>Reinitialiser</label>
+                            <label>Réinitialiser</label>
                             <select value={resetShop} onChange={(e) => setResetShop(e.target.value)}>
                                 <option value="">Choisir une option</option>
                                 <option value="all">Toutes les boutiques</option>
