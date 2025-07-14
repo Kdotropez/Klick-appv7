@@ -228,6 +228,55 @@ function App() {
         saveAs(blob, `planning_export_${format(new Date(), 'yyyy-MM-dd')}.json`);
     };
 
+    // Import data from JSON
+    const handleImportFromJson = (event) => {
+        console.log('Import JSON déclenché', event.target.files);
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                console.log('Fichier lu', e.target.result);
+                try {
+                    const data = JSON.parse(e.target.result);
+                    const errors = validateImportedData(data);
+                    if (errors.length > 0) {
+                        console.error('Erreurs de validation:', errors);
+                        alert(`Erreur dans les données importées:\n${errors.join('\n')}`);
+                        return;
+                    }
+                    cleanLocalStorage();
+                    Object.keys(data).forEach(key => {
+                        console.log(`Saving to localStorage: ${key}`, data[key]);
+                        saveToLocalStorage(key, data[key]);
+                        if (key === 'shops') setShops(data[key]);
+                        else if (key === 'selectedShop') setSelectedShop(data[key]);
+                        else if (key === 'selectedWeek') setSelectedWeek(data[key]);
+                        else if (key === 'timeSlotConfig') setTimeSlotConfig(data[key] || {});
+                    });
+                    saveToFirebase(data); // Synchroniser avec Firebase
+                    console.log('Données importées, timeSlotConfig:', data.timeSlotConfig);
+                    if (
+                        data.timeSlotConfig?.interval &&
+                        Array.isArray(data.timeSlotConfig?.timeSlots) &&
+                        data.timeSlotConfig.timeSlots.length > 0 &&
+                        data.selectedShop &&
+                        data.selectedWeek &&
+                        data[`selected_employees_${data.selectedShop}_${data.selectedWeek}`]?.length > 0
+                    ) {
+                        setCurrentStep('planning');
+                    } else {
+                        setCurrentStep('config');
+                    }
+                    alert('Succès: Données importées avec succès depuis le fichier JSON');
+                } catch (error) {
+                    console.error('Erreur lors de la lecture du JSON:', error);
+                    alert('Erreur: Impossible de lire le fichier JSON');
+                }
+            };
+            reader.readAsText(file);
+        }
+    };
+
     // Import data from Firebase
     const handleImportFromFirebase = async () => {
         console.log('handleImportFromFirebase appelé');
@@ -340,6 +389,7 @@ function App() {
                     onReset={handleResetData}
                     config={timeSlotConfig}
                     handleImportFromFirebase={handleImportFromFirebase}
+                    handleImportFromJson={handleImportFromJson}
                 />
             )}
             {currentStep === 'shop' && (
