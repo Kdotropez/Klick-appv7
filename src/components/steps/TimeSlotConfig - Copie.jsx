@@ -4,7 +4,7 @@ import Button from '../common/Button';
 import { saveToLocalStorage } from '../../utils/localStorage';
 import '../../assets/styles.css';
 
-const TimeSlotConfig = ({ onNext, onBack, onReset, config, handleImportFromFirebase }) => {
+const TimeSlotConfig = ({ onNext, onBack, onReset, config, handleImportFromJson }) => {
     const [interval, setInterval] = useState(config?.interval || 15);
     const [startTime, setStartTime] = useState(config?.startTime || '09:00');
     const [endTime, setEndTime] = useState(config?.endTime || '19:00');
@@ -213,12 +213,18 @@ const TimeSlotConfig = ({ onNext, onBack, onReset, config, handleImportFromFireb
                 >
                     Réinitialiser
                 </Button>
-                <Button
-                    className="button-base button-primary"
-                    onClick={handleImportFromFirebase}
-                >
-                    Importer depuis Firebase
-                </Button>
+                <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportFromJson}
+                    style={{ display: 'none' }}
+                    id="import-json"
+                />
+                <label htmlFor="import-json">
+                    <Button as="span" className="button-base button-primary">
+                        Importer JSON
+                    </Button>
+                </label>
             </div>
         </div>
     );

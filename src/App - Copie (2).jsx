@@ -17,7 +17,7 @@ function App() {
     const [selectedShop, setSelectedShop] = useState('');
     const [selectedWeek, setSelectedWeek] = useState('');
     const [timeSlotConfig, setTimeSlotConfig] = useState({});
-    // Initialize currentStep based on localStorage or Firebase data
+    // Initialize currentStep based on localStorage data
     const [currentStep, setCurrentStep] = useState(() => {
         const storedConfig = loadFromLocalStorage('timeSlotConfig');
         const storedShop = loadFromLocalStorage('selectedShop');
@@ -53,17 +53,6 @@ function App() {
                         saveToLocalStorage(key, firebaseData[key]);
                     }
                 });
-                // Passer à l'étape planning si toutes les données sont présentes
-                if (
-                    firebaseData.timeSlotConfig?.interval &&
-                    Array.isArray(firebaseData.timeSlotConfig?.timeSlots) &&
-                    firebaseData.timeSlotConfig.timeSlots.length > 0 &&
-                    firebaseData.selectedShop &&
-                    firebaseData.selectedWeek &&
-                    firebaseData[`selected_employees_${firebaseData.selectedShop}_${firebaseData.selectedWeek}`]?.length > 0
-                ) {
-                    setCurrentStep('planning');
-                }
             } else {
                 console.log('Aucune donnée Firebase, chargement depuis localStorage...');
                 setShops(loadFromLocalStorage('shops') || []);
@@ -200,8 +189,6 @@ function App() {
         if (currentIndex > 0) {
             setCurrentStep(steps[currentIndex - 1]);
             console.log('Nouvelle étape:', steps[currentIndex - 1]);
-        } else {
-            console.log('Aucune étape précédente disponible');
         }
     };
 
@@ -228,47 +215,52 @@ function App() {
         saveAs(blob, `planning_export_${format(new Date(), 'yyyy-MM-dd')}.json`);
     };
 
-    // Import data from Firebase
-    const handleImportFromFirebase = async () => {
-        console.log('handleImportFromFirebase appelé');
-        try {
-            const data = await loadFromFirebase();
-            if (!data) {
-                alert('Erreur: Aucune donnée disponible sur Firebase.');
-                return;
-            }
-            const errors = validateImportedData(data);
-            if (errors.length > 0) {
-                console.error('Erreurs de validation:', errors);
-                alert(`Erreur dans les données importées depuis Firebase:\n${errors.join('\n')}`);
-                return;
-            }
-            cleanLocalStorage();
-            Object.keys(data).forEach(key => {
-                console.log(`Saving to localStorage: ${key}`, data[key]);
-                saveToLocalStorage(key, data[key]);
-                if (key === 'shops') setShops(data[key]);
-                else if (key === 'selectedShop') setSelectedShop(data[key]);
-                else if (key === 'selectedWeek') setSelectedWeek(data[key]);
-                else if (key === 'timeSlotConfig') setTimeSlotConfig(data[key] || {});
-            });
-            console.log('Données importées depuis Firebase:', data);
-            if (
-                data.timeSlotConfig?.interval &&
-                Array.isArray(data.timeSlotConfig?.timeSlots) &&
-                data.timeSlotConfig.timeSlots.length > 0 &&
-                data.selectedShop &&
-                data.selectedWeek &&
-                data[`selected_employees_${data.selectedShop}_${data.selectedWeek}`]?.length > 0
-            ) {
-                setCurrentStep('planning');
-            } else {
-                setCurrentStep('config');
-            }
-            alert('Succès: Données importées avec succès depuis Firebase');
-        } catch (error) {
-            console.error('Erreur lors de l\'importation depuis Firebase:', error);
-            alert('Erreur: Impossible de charger les données depuis Firebase');
+    // Import data from JSON
+    const handleImportFromJson = (event) => {
+        console.log('Import JSON déclenché', event.target.files);
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                console.log('Fichier lu', e.target.result);
+                try {
+                    const data = JSON.parse(e.target.result);
+                    const errors = validateImportedData(data);
+                    if (errors.length > 0) {
+                        console.error('Erreurs de validation:', errors);
+                        alert(`Erreur dans les données importées:\n${errors.join('\n')}`);
+                        return;
+                    }
+                    cleanLocalStorage();
+                    Object.keys(data).forEach(key => {
+                        console.log(`Saving to localStorage: ${key}`, data[key]);
+                        saveToLocalStorage(key, data[key]);
+                        if (key === 'shops') setShops(data[key]);
+                        else if (key === 'selectedShop') setSelectedShop(data[key]);
+                        else if (key === 'selectedWeek') setSelectedWeek(data[key]);
+                        else if (key === 'timeSlotConfig') setTimeSlotConfig(data[key] || {});
+                    });
+                    saveToFirebase(data);
+                    console.log('Données importées, timeSlotConfig:', data.timeSlotConfig);
+                    if (
+                        data.timeSlotConfig?.interval &&
+                        Array.isArray(data.timeSlotConfig?.timeSlots) &&
+                        data.timeSlotConfig.timeSlots.length > 0 &&
+                        data.selectedShop &&
+                        data.selectedWeek &&
+                        data[`selected_employees_${data.selectedShop}_${data.selectedWeek}`]?.length > 0
+                    ) {
+                        setCurrentStep('planning');
+                    } else {
+                        setCurrentStep('config');
+                    }
+                    alert('Succès: Données importées avec succès depuis le fichier JSON');
+                } catch (error) {
+                    console.error('Erreur lors de la lecture du JSON:', error);
+                    alert('Erreur: Impossible de lire le fichier JSON');
+                }
+            };
+            reader.readAsText(file);
         }
     };
 
@@ -339,7 +331,7 @@ function App() {
                     onNext={goToNextStep}
                     onReset={handleResetData}
                     config={timeSlotConfig}
-                    handleImportFromFirebase={handleImportFromFirebase}
+                    handleImportFromJson={handleImportFromJson}
                 />
             )}
             {currentStep === 'shop' && (

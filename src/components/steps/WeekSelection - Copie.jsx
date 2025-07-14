@@ -2,7 +2,6 @@
 import { format, startOfMonth, endOfMonth, startOfWeek, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { saveToLocalStorage, loadFromLocalStorage } from '../../utils/localStorage';
-import { loadFromFirebase } from '../../utils/firebase';
 import Button from '../common/Button';
 import '../../assets/styles.css';
 
@@ -13,46 +12,37 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
     const [feedback, setFeedback] = useState('');
 
     useEffect(() => {
-        const loadWeeks = async () => {
-            console.log('useEffect déclenché pour savedWeeks, selectedShop:', selectedShop, 'selectedWeek:', selectedWeek);
-            console.log('localStorage content:', Object.keys(localStorage));
-            const storageKeys = Object.keys(localStorage).filter(key => key.startsWith(`planning_${selectedShop}_`));
-            console.log('Found storage keys:', storageKeys);
+        console.log('useEffect déclenché pour savedWeeks, selectedShop:', selectedShop, 'selectedWeek:', selectedWeek);
+        console.log('localStorage content:', Object.keys(localStorage));
+        const storageKeys = Object.keys(localStorage).filter(key => key.startsWith(`planning_${selectedShop}_`));
+        console.log('Found storage keys:', storageKeys);
 
-            // Charger les données Firebase pour vérifier les semaines supplémentaires
-            const firebaseData = await loadFromFirebase();
-            const firebaseKeys = firebaseData ? Object.keys(firebaseData).filter(key => key.startsWith(`planning_${selectedShop}_`)) : [];
-            console.log('Found Firebase keys:', firebaseKeys);
-
-            const allKeys = [...new Set([...storageKeys, ...firebaseKeys])];
-            const weeks = allKeys
-                .map(key => {
-                    const weekKey = key.replace(`planning_${selectedShop}_`, '');
-                    console.log('Processing key:', key, 'Extracted weekKey:', weekKey);
-                    try {
-                        const weekDate = new Date(weekKey);
-                        if (!isNaN(weekDate.getTime()) && isMonday(weekDate)) {
-                            const weekPlanning = loadFromLocalStorage(key) || (firebaseData && firebaseData[key]);
-                            if (weekPlanning && Object.keys(weekPlanning).length > 0) {
-                                return {
-                                    key: weekKey,
-                                    display: `Semaine du ${format(weekDate, 'd MMMM yyyy', { locale: fr })}`
-                                };
-                            }
-                        }
-                        console.log(`Skipping ${weekKey}: Invalid date or empty planning`);
-                        return null;
-                    } catch (e) {
-                        console.error(`Error processing key ${key}:`, e);
-                        return null;
+        const weeks = storageKeys
+            .map(key => {
+                const weekKey = key.replace(`planning_${selectedShop}_`, '');
+                console.log('Processing key:', key, 'Extracted weekKey:', weekKey);
+                try {
+                    const weekDate = new Date(weekKey);
+                    const weekPlanning = JSON.parse(localStorage.getItem(key) || '{}');
+                    console.log(`Week data for ${weekKey}:`, weekPlanning);
+                    if (!isNaN(weekDate.getTime())) {
+                        return {
+                            key: weekKey,
+                            display: `Lundi ${format(weekDate, 'd MMMM', { locale: fr })} au Dimanche ${format(addDays(weekDate, 6), 'd MMMM yyyy', { locale: fr })}`
+                        };
                     }
-                })
-                .filter(week => week !== null)
-                .sort((a, b) => new Date(a.key) - new Date(b.key));
-            console.log('Processed saved weeks:', weeks);
-            setSavedWeeks(weeks);
-        };
-        loadWeeks();
+                    console.log(`Skipping ${weekKey}: Invalid date`);
+                    return null;
+                } catch (e) {
+                    console.error(`Error processing key ${key}:`, e);
+                    return null;
+                }
+            })
+            .filter(week => week !== null)
+            .sort((a, b) => new Date(a.key) - new Date(b.key));
+        console.log('Processed saved weeks:', weeks);
+        setSavedWeeks(weeks);
+        console.log('savedWeeks updated:', weeks);
     }, [selectedShop, selectedWeek]);
 
     const handleMonthChange = (e) => {
@@ -69,7 +59,7 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
         while (current <= monthEnd) {
             weeks.push({
                 key: format(current, 'yyyy-MM-dd'),
-                display: `Semaine du ${format(current, 'd MMMM yyyy', { locale: fr })}`
+                display: `Lundi ${format(current, 'd MMMM', { locale: fr })} au Dimanche ${format(addDays(current, 6), 'd MMMM yyyy', { locale: fr })}`
             });
             current = addDays(current, 7);
         }
@@ -89,7 +79,6 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
             setFeedback('Erreur: Veuillez sélectionner une semaine.');
             return;
         }
-        saveToLocalStorage('selectedWeek', currentWeek);
         onNext(currentWeek);
     };
 
@@ -100,6 +89,8 @@ const WeekSelection = ({ onNext, onBack, onReset, selectedWeek, selectedShop }) 
         setFeedback('Succès: Toutes les données ont été réinitialisées.');
         onReset({ feedback: 'Succès: Toutes les données ont été réinitialisées.' });
     };
+
+    console.log('Rendering WeekSelection, savedWeeks:', savedWeeks);
 
     return (
         <div className="week-selection-container">
